@@ -335,6 +335,43 @@
           if (this.buttonB) this.buttonB.classList.toggle('activo', !isA);
         }
       });
+
+      // Hainbat aukeraren artean aukeratzeko osagaia (adib. hiru argazki)
+      // contents eta buttons: hautatzaileak komaz bereizita, ordena berean
+      AFRAME.registerComponent('aukera-anitz-handler', {
+        schema: {
+          contents: { default: '' },
+          buttons: { default: '' },
+          buttonsRow: { default: '' }
+        },
+
+        init: function () {
+          this.index = 0;
+
+          const split = s => s.split(',').map(x => x.trim()).filter(Boolean);
+          this.contents = split(this.data.contents).map(sel => document.querySelector(sel));
+          this.buttons = split(this.data.buttons).map(sel => document.querySelector(sel));
+          this.buttonsRow = document.querySelector(this.data.buttonsRow);
+
+          this.el.addEventListener('targetFound', () => {
+            if (this.buttonsRow) this.buttonsRow.style.display = 'flex';
+            this.applyState();
+          });
+
+          this.el.addEventListener('targetLost', () => {
+            if (this.buttonsRow) this.buttonsRow.style.display = 'none';
+          });
+
+          this.buttons.forEach((btn, i) => {
+            if (btn) btn.addEventListener('click', () => { this.index = i; this.applyState(); });
+          });
+        },
+
+        applyState: function () {
+          this.contents.forEach((el, i) => { if (el) el.setAttribute('visible', i === this.index); });
+          this.buttons.forEach((btn, i) => { if (btn) btn.classList.toggle('activo', i === this.index); });
+        }
+      });
     </script>
 
     <style>
@@ -477,17 +514,36 @@
         </a-gltf-model>
       </a-entity>
 
-      <!-- Target 3: hiru argazki, bata bestearen ondoan (talde gisa eskalatu/mugitu) -->
-      <a-entity id="target-kondents" mindar-image-target="targetIndex: 2">
-        <a-entity
-          id="kondents-taldea"
-          position="0 0 0"
+      <!-- Target 3: hiru argazki, botoi bidez (bata bestearen ordez) -->
+      <a-entity
+        id="target-kondents"
+        mindar-image-target="targetIndex: 2"
+        aukera-anitz-handler="contents: #kondents0-plane, #kondents1-plane, #kondents2-plane; buttons: #btn-kondents0, #btn-kondents1, #btn-kondents2; buttonsRow: #fila-kondents">
+
+        <a-image
+          id="kondents0-plane"
+          src="#kondents0Img"
+          width="1.6" height="1.2"
+          position="0 0 0" visible="true"
           billboard
           pinch-scale="targetSelector: #target-kondents; minScale: 0.3; maxScale: 5">
-          <a-image src="#kondents0Img" width="0.9" height="0.675" position="-1 0 0"></a-image>
-          <a-image src="#kondents1Img" width="0.9" height="0.675" position="0 0 0"></a-image>
-          <a-image src="#kondents2Img" width="0.9" height="0.675" position="1 0 0"></a-image>
-        </a-entity>
+        </a-image>
+        <a-image
+          id="kondents1-plane"
+          src="#kondents1Img"
+          width="1.6" height="1.2"
+          position="0 0 0" visible="false"
+          billboard
+          pinch-scale="targetSelector: #target-kondents; minScale: 0.3; maxScale: 5">
+        </a-image>
+        <a-image
+          id="kondents2-plane"
+          src="#kondents2Img"
+          width="1.6" height="1.2"
+          position="0 0 0" visible="false"
+          billboard
+          pinch-scale="targetSelector: #target-kondents; minScale: 0.3; maxScale: 5">
+        </a-image>
       </a-entity>
 
       <!-- Target 4: Akoplamendu elektrikoa -->
@@ -495,7 +551,7 @@
         <a-gltf-model
           src="#acopElectModelo"
           position="0 0 0"
-          scale="1 1 1"
+          scale="10 10 10"
           rotation="0 0 0"
           center-model
           touch-gestures="targetSelector: #target-acop-elect; rotationFactor: 6; minScale: 0.1; maxScale: 10; panFactor: 0.02">
@@ -507,7 +563,7 @@
         <a-gltf-model
           src="#acopMagnetModelo"
           position="0 0 0"
-          scale="1 1 1"
+          scale="10 10 10"
           rotation="0 0 0"
           center-model
           touch-gestures="targetSelector: #target-acop-magnet; rotationFactor: 6; minScale: 0.1; maxScale: 10; panFactor: 0.02">
@@ -519,7 +575,7 @@
         <a-gltf-model
           src="#acopElectMagnModelo"
           position="0 0 0"
-          scale="1 1 1"
+          scale="10 10 10"
           rotation="0 0 0"
           center-model
           touch-gestures="targetSelector: #target-acop-elect-magn; rotationFactor: 6; minScale: 0.1; maxScale: 10; panFactor: 0.02">
@@ -536,6 +592,13 @@
     <div id="fila-emi" class="fila-opciones">
       <button id="btn-emi-reala" class="activo">Iragazki Erreala</button>
       <button id="btn-emi-3d">3D Eredua</button>
+    </div>
+
+    <!-- Target 3 botoiak: Argazkia 1 / 2 / 3 -->
+    <div id="fila-kondents" class="fila-opciones">
+      <button id="btn-kondents0" class="activo">Argazkia 1</button>
+      <button id="btn-kondents1">Argazkia 2</button>
+      <button id="btn-kondents2">Argazkia 3</button>
     </div>
 
     <script>
