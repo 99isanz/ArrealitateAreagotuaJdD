@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+
+    <!-- A-Frame 1.5.0 + MindAR 1.2.5 -->
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+
+    <script>
+      // 3D eredua kudeatzeko gestuen osagaia (biratu + eskalatu + mugitu)
+      AFRAME.registerComponent('touch-gestures', {
+        schema: {
+          rotationFactor: { default: 6 },
+          minScale: { default: 0.1 },
+          maxScale: { default: 10 },
+          panFactor: { default: 0.02 },
+          maxDeltaPerEvent: { default: 30 },
+          targetSelector: { default: '#target-modelo' }
+        },
+
+        init: function () {
+          this.isVisible = false;
+          this.initialScale = this.el.object3D.scale.clone();
+          this.scaleFactor = 1;
+
+          this.lastX = 0;
+          this.lastY = 0;
+          this.lastDistance = null;
+          this.lastCenter = null;
+
+          this.onTouchStart = this.onTouchStart.bind(this);
+          this.onTouchMove = this.onTouchMove.bind(this);
+
+          const targetEntity = document.querySelector(this.data.targetSelector);
+          if (targetEntity) {
+            targetEntity.addEventListener('targetFound', () => { this.isVisible = true; });
+            targetEntity.addEventListener('targetLost', () => { this.isVisible = false; });
+          }
+
+          const sceneEl = this.el.sceneEl;
+          if (sceneEl.hasLoaded) {
+            this.attachTouchListeners();
+          } else {
+            sceneEl.addEventListener('loaded', () => this.attachTouchListeners());
+          }
+        },
+
+        attachTouchListeners: function () {
+          const canvas = this.el.sceneEl.canvas;
+          canvas.addEventListener('touchstart', this.onTouchStart, { passive: false });
+          canvas.addEventListener('touchmove', this.onTouchMove, { passive: false });
+        },
+
+        active: function () {
+          return this.isVisible && this.el.object3D.visible;
+        },
+
+        onTouchStart: function (event) {
+          if (event.touches.length === 1) {
+            this.lastX = event.touches[0].clientX;
+            this.lastY = event.touches[0].clientY;
+          } else if (event.touches.length === 2) {
+            this.lastDistance = this.getDistance(event.touches);
+            this.lastCenter = this.getCenter(event.touches);
+          }
+        },
+
+        onTouchMove: function (event) {
+          event.preventDefault();
+
+          if (event.touches.length === 1) {
+            const x = event.touches[0].clientX;
+            const y = event.touches[0].clientY;
+
+            if (this.active()) {
+              const deltaX = this.clampDelta(x - this.lastX);
+              const deltaY = this.clampDelta(y - this.lastY);
+              this.el.object3D.rotation.y += deltaX * (this.data.rotationFactor / 1000);
+              this.el.object3D.rotation.x += deltaY * (this.data.rotationFactor / 1000);
+            }
+
+            this.lastX = x;
+            this.lastY = y;
+          } else if (event.touches.length === 2) {
+            const distance = this.getDistance(event.touches);
+            const center = this.getCenter(event.touches);
+
+            if (this.active()) {
+              if (this.lastDistance !== null) {
+                const delta = this.clampDelta(distance - this.lastDistance);
+                this.scaleFactor *= 1 + delta / 200;
+                this.scaleFactor = Math.min(Math.max(this.scaleFactor, this.data.minScale), this.data.maxScale);
+
+                this.el.object3D.scale.x = this.scaleFactor * this.initialScale.x;
+                this.el.object3D.scale.y = this.scaleFactor * this.initialScale.y;
+                this.el.object3D.scale.z = this.scaleFactor * this.initialScale.z;
+              }
+
+              if (this.lastCenter !== null) {
+                const deltaX = this.clampDelta(center.x - this.lastCenter.x);
+                const deltaY = this.clampDelta(center.y - this.lastCenter.y);
+
+                this.el.object3D.position.x += deltaX * this.data.panFactor;
+                this.el.object3D.position.y -= deltaY * this.data.panFactor;
+
+                const maxOffset = 1;
+                this.el.object3D.position.x = Math.min(Math.max(this.el.object3D.position.x, -maxOffset), maxOffset);
+                this.el.object3D.position.y = Math.min(Math.max(this.el.object3D.position.y, -maxOffset), maxOffset);
+              }
+            }
+
+            this.lastDistance = distance;
+            this.lastCenter = center;
+          }
+        },
+
+        getDistance: function (touches) {
+          const dx = touches[0].clientX - touches[1].clientX;
+          const dy = touches[0].clientY - touches[1].clientY;
+          return Math.sqrt(dx * dx + dy * dy);
+        },
+
+        getCenter: function (touches) {
+          return {
+            x: (touches[0].clientX + touches[1].clientX) / 2,
+            y: (touches[0].clientY + touches[1].clientY) / 2
+          };
+        },
+
+        clampDelta: function (delta) {
+          const max = this.data.maxDeltaPerEvent;
+          return Math.min(Math.max(delta, -max), max);
+        }
+      });
+
+      // Argazkietarako osagaia: bi hatzeko pellizkoarekin eskalatu
+      // eta bi hatzekin arrastatuta gora/behera (eta alboetara) mugitu.
+      // Ez du hatz bakarreko biraketarik (argazkiak ez dira biratu behar).
+      AFRAME.registerComponent('pinch-scale', {
+        schema: {
+          minScale: { default: 0.3 },
+          maxScale: { default: 5 },
+          maxDeltaPerEvent: { default: 30 },
+          panFactor: { default: 0.02 },
+          targetSelector: { default: '' }
+        },
+
+        init: function () {
+          this.isVisible = false;
+          this.initialScale = this.el.object3D.scale.clone();
+          this.scaleFactor = 1;
+          this.lastDistance = null;
+          this.lastCenter = null;
+
+          this.onTouchStart = this.onTouchStart.bind(this);
+          this.onTouchMove = this.onTouchMove.bind(this);
+
+          if (this.data.targetSelector) {
+            const targetEntity = document.querySelector(this.data.targetSelector);
+            if (targetEntity) {
+              targetEntity.addEventListener('targetFound', () => { this.isVisible = true; });
+              targetEntity.addEventListener('targetLost', () => { this.isVisible = false; });
+            }
+          }
+
+          const sceneEl = this.el.sceneEl;
+          if (sceneEl.hasLoaded) {
+            this.attachTouchListeners();
+          } else {
+            sceneEl.addEventListener('loaded', () => this.attachTouchListeners());
+          }
+        },
+
+        attachTouchListeners: function () {
+          const canvas = this.el.sceneEl.canvas;
+          canvas.addEventListener('touchstart', this.onTouchStart, { passive: false });
+          canvas.addEventListener('touchmove', this.onTouchMove, { passive: false });
+        },
+
+        active: function () {
+          return this.isVisible && this.el.object3D.visible;
+        },
+
+        onTouchStart: function (event) {
+          if (event.touches.length === 2) {
+            this.lastDistance = this.getDistance(event.touches);
+            this.lastCenter = this.getCenter(event.touches);
+          }
+        },
+
+        onTouchMove: function (event) {
+          if (event.touches.length !== 2) return;
+          event.preventDefault();
+
+          const distance = this.getDistance(event.touches);
+          const center = this.getCenter(event.touches);
+          const max = this.data.maxDeltaPerEvent;
+
+          if (this.active()) {
+            if (this.lastDistance !== null) {
+              const delta = Math.min(Math.max(distance - this.lastDistance, -max), max);
+
+              this.scaleFactor *= 1 + delta / 200;
+              this.scaleFactor = Math.min(Math.max(this.scaleFactor, this.data.minScale), this.data.maxScale);
+
+              this.el.object3D.scale.x = this.scaleFactor * this.initialScale.x;
+              this.el.object3D.scale.y = this.scaleFactor * this.initialScale.y;
+              this.el.object3D.scale.z = this.scaleFactor * this.initialScale.z;
+            }
+
+            if (this.lastCenter !== null) {
+              const deltaX = Math.min(Math.max(center.x - this.lastCenter.x, -max), max);
+              const deltaY = Math.min(Math.max(center.y - this.lastCenter.y, -max), max);
+
+              this.el.object3D.position.x += deltaX * this.data.panFactor;
+              this.el.object3D.position.y -= deltaY * this.data.panFactor;
+
+              const maxOffset = 1;
+              this.el.object3D.position.x = Math.min(Math.max(this.el.object3D.position.x, -maxOffset), maxOffset);
+              this.el.object3D.position.y = Math.min(Math.max(this.el.object3D.position.y, -maxOffset), maxOffset);
+            }
+          }
+
+          this.lastDistance = distance;
+          this.lastCenter = center;
+        },
+
+        getDistance: function (touches) {
+          const dx = touches[0].clientX - touches[1].clientX;
+          const dy = touches[0].clientY - touches[1].clientY;
+          return Math.sqrt(dx * dx + dy * dy);
+        },
+
+        getCenter: function (touches) {
+          return {
+            x: (touches[0].clientX + touches[1].clientX) / 2,
+            y: (touches[0].clientY + touches[1].clientY) / 2
+          };
+        }
+      });
+
+      // Argazki lauak beti kamerari begira mantentzeko osagaia.
+      // Horrela, marker-aren angelua aldatu arren, panela ez da okertzen/biratzen;
+      // erabiltzaileak pellizkoarekin/arrastatuz eginiko aldaketak bakarrik ikusiko dira.
+      AFRAME.registerComponent('billboard', {
+        tick: function () {
+          const cameraObj = this.el.sceneEl.camera;
+          const parent = this.el.object3D.parent;
+          if (!cameraObj || !parent) return;
+
+          const camWorldQuat = new THREE.Quaternion();
+          cameraObj.getWorldQuaternion(camWorldQuat);
+
+          const parentWorldQuat = new THREE.Quaternion();
+          parent.getWorldQuaternion(parentWorldQuat);
+
+          const localQuat = parentWorldQuat.clone().invert().multiply(camWorldQuat);
+          this.el.object3D.quaternion.copy(localQuat);
+        }
+      });
+
+      // Eredu bat automatikoki erdiratzeko osagaia (pibotea ez badago
+      // ereduaren benetako erdigunean, adib. Cond.glb edo EMIFilter.glb)
+      AFRAME.registerComponent('center-model', {
+        init: function () {
+          this.el.addEventListener('model-loaded', () => {
+            try {
+              const mesh = this.el.getObject3D('mesh');
+              if (!mesh) return;
+
+              const box = new THREE.Box3().setFromObject(mesh);
+              const center = box.getCenter(new THREE.Vector3());
+
+              // Balio baliogabeak badira (NaN/Infinity), ez ukitu ereduaren posizioa
+              if (!isFinite(center.x) || !isFinite(center.y) || !isFinite(center.z)) {
+                console.warn('center-model: erdigune baliogabea, ez da zuzendu.', this.el.id || this.el);
+                return;
+              }
+
+              mesh.position.x -= center.x;
+              mesh.position.y -= center.y;
+              mesh.position.z -= center.z;
+            } catch (err) {
+              console.warn('center-model: errorea erdiratzean, jatorrizko posizioari eutsiko zaio.', err);
+            }
+          });
+        }
+      });
+
+      // Bi aukeraren artean aukeratzeko osagai orokorra
+      AFRAME.registerComponent('bi-aukera-handler', {
+        schema: {
+          contentA: { default: '' },
+          contentB: { default: '' },
+          buttonsRow: { default: '' },
+          buttonA: { default: '' },
+          buttonB: { default: '' }
+        },
+
+        init: function () {
+          this.option = 'A';
+
+          this.contentA = document.querySelector(this.data.contentA);
+          this.contentB = document.querySelector(this.data.contentB);
+          this.buttonsRow = document.querySelector(this.data.buttonsRow);
+          this.buttonA = document.querySelector(this.data.buttonA);
+          this.buttonB = document.querySelector(this.data.buttonB);
+
+          this.el.addEventListener('targetFound', () => {
+            if (this.buttonsRow) this.buttonsRow.style.display = 'flex';
+            this.applyState();
+          });
+
+          this.el.addEventListener('targetLost', () => {
+            if (this.buttonsRow) this.buttonsRow.style.display = 'none';
+          });
+
+          if (this.buttonA) this.buttonA.addEventListener('click', () => this.selectOption('A'));
+          if (this.buttonB) this.buttonB.addEventListener('click', () => this.selectOption('B'));
+        },
+
+        selectOption: function (opt) {
+          this.option = opt;
+          this.applyState();
+        },
+
+        applyState: function () {
+          const isA = this.option === 'A';
+
+          if (this.contentA) this.contentA.setAttribute('visible', isA);
+          if (this.contentB) this.contentB.setAttribute('visible', !isA);
+
+          if (this.buttonA) this.buttonA.classList.toggle('activo', isA);
+          if (this.buttonB) this.buttonB.classList.toggle('activo', !isA);
+        }
+      });
+    </script>
+
+    <style>
+      body { margin: 0; overflow: hidden; }
+      * { touch-action: none; }
+
+      .fila-opciones {
+        display: none;
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 24px;
+        justify-content: center;
+        gap: 16px;
+        z-index: 999;
+        touch-action: auto;
+      }
+
+      .fila-opciones button {
+        padding: 10px 22px;
+        font-size: 15px;
+        font-weight: bold;
+        border: none;
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.85);
+        color: #222;
+        touch-action: auto;
+      }
+
+      .fila-opciones button.activo {
+        background: #2b7cff;
+        color: #fff;
+      }
+
+      /* Blokeo / eskaneo botoia */
+      #btn-blokeo {
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1000;
+        padding: 10px 24px;
+        border: none;
+        border-radius: 22px;
+        font-weight: bold;
+        font-size: 14px;
+        color: #fff;
+        touch-action: auto;
+      }
+      #btn-blokeo.eskaneatzen { background: #2ecc71; }
+      #btn-blokeo.blokeatuta { background: #e74c3c; }
+
+      /* Bilatzen ari dela adierazteko etiketa propioa (MindAR-en UI nagusia ordezkatzen du) */
+      #bilaketa-adierazlea {
+        display: none;
+        position: fixed;
+        top: 66px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 998;
+        padding: 6px 16px;
+        border-radius: 16px;
+        background: rgba(0, 0, 0, 0.45);
+        color: #fff;
+        font-size: 13px;
+        font-weight: 600;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <a-scene
+      mindar-image="imageTargetSrc: ./targets.mind; uiScanning: no; uiLoading: no; uiError: no;"
+      color-space="sRGB"
+      renderer="colorManagement: true;"
+      vr-mode-ui="enabled: false"
+      device-orientation-permission-ui="enabled: false">
+
+      <a-assets>
+        <!-- Target 1: EMI (iragazki erreala / 3D eredua) -->
+        <a-asset-item id="emiRealModelo" src="./EMIReal.glb"></a-asset-item>
+        <a-asset-item id="emiFilterModelo" src="./EMIFilter.glb"></a-asset-item>
+
+        <!-- Target 2: Kondentsadorea -->
+        <a-asset-item id="condModelo" src="./Cond.glb"></a-asset-item>
+
+        <!-- Target 3: hiru argazki -->
+        <img id="kondents0Img" src="./Kondents0.jpg" crossorigin="anonymous" />
+        <img id="kondents1Img" src="./Kondents1.jpg" crossorigin="anonymous" />
+        <img id="kondents2Img" src="./Kondents2.jpg" crossorigin="anonymous" />
+
+        <!-- Target 4, 5, 6: akoplamenduak -->
+        <a-asset-item id="acopElectModelo" src="./AcopElect.glb"></a-asset-item>
+        <a-asset-item id="acopMagnetModelo" src="./AcopMagnet.glb"></a-asset-item>
+        <a-asset-item id="acopElectMagnModelo" src="./AcopElectMagn.glb"></a-asset-item>
+      </a-assets>
+
+      <a-light type="ambient" intensity="1.5"></a-light>
+      <a-light type="directional" position="1 2 1" intensity="1.0"></a-light>
+
+      <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+      <!-- Target 1: EMI - EMIReal edo EMIFilter, botoi bidez -->
+      <a-entity
+        id="target-emi"
+        mindar-image-target="targetIndex: 0"
+        bi-aukera-handler="contentA: #emi-real-modelo; contentB: #emi-filter-modelo; buttonsRow: #fila-emi; buttonA: #btn-emi-reala; buttonB: #btn-emi-3d">
+
+        <a-gltf-model
+          id="emi-real-modelo"
+          src="#emiRealModelo"
+          position="0 0 0"
+          scale="1.5 1.5 1.5"
+          rotation="0 0 0"
+          visible="true"
+          touch-gestures="targetSelector: #target-emi; rotationFactor: 6; minScale: 0.1; maxScale: 10; panFactor: 0.02">
+        </a-gltf-model>
+
+        <a-gltf-model
+          id="emi-filter-modelo"
+          src="#emiFilterModelo"
+          position="0 0 0"
+          scale="6 6 6"
+          rotation="0 0 0"
+          visible="false"
+          center-model
+          touch-gestures="targetSelector: #target-emi; rotationFactor: 6; minScale: 0.1; maxScale: 20; panFactor: 0.02">
+        </a-gltf-model>
+      </a-entity>
+
+      <!-- Target 2: Kondentsadorea modeloa -->
+      <a-entity id="target-cond" mindar-image-target="targetIndex: 1">
+        <a-gltf-model
+          src="#condModelo"
+          position="0 0 0"
+          scale="0.02 0.02 0.02"
+          rotation="0 0 0"
+          center-model
+          touch-gestures="targetSelector: #target-cond; rotationFactor: 6; minScale: 0.1; maxScale: 10; panFactor: 0.02">
+        </a-gltf-model>
+      </a-entity>
+
+      <!-- Target 3: hiru argazki, bata bestearen ondoan (talde gisa eskalatu/mugitu) -->
+      <a-entity id="target-kondents" mindar-image-target="targetIndex: 2">
+        <a-entity
+          id="kondents-taldea"
+          position="0 0 0"
+          billboard
+          pinch-scale="targetSelector: #target-kondents; minScale: 0.3; maxScale: 5">
+          <a-image src="#kondents0Img" width="0.9" height="0.675" position="-1 0 0"></a-image>
+          <a-image src="#kondents1Img" width="0.9" height="0.675" position="0 0 0"></a-image>
+          <a-image src="#kondents2Img" width="0.9" height="0.675" position="1 0 0"></a-image>
+        </a-entity>
+      </a-entity>
+
+      <!-- Target 4: Akoplamendu elektrikoa -->
+      <a-entity id="target-acop-elect" mindar-image-target="targetIndex: 3">
+        <a-gltf-model
+          src="#acopElectModelo"
+          position="0 0 0"
+          scale="1 1 1"
+          rotation="0 0 0"
+          center-model
+          touch-gestures="targetSelector: #target-acop-elect; rotationFactor: 6; minScale: 0.1; maxScale: 10; panFactor: 0.02">
+        </a-gltf-model>
+      </a-entity>
+
+      <!-- Target 5: Akoplamendu magnetikoa -->
+      <a-entity id="target-acop-magnet" mindar-image-target="targetIndex: 4">
+        <a-gltf-model
+          src="#acopMagnetModelo"
+          position="0 0 0"
+          scale="1 1 1"
+          rotation="0 0 0"
+          center-model
+          touch-gestures="targetSelector: #target-acop-magnet; rotationFactor: 6; minScale: 0.1; maxScale: 10; panFactor: 0.02">
+        </a-gltf-model>
+      </a-entity>
+
+      <!-- Target 6: Akoplamendu elektromagnetikoa -->
+      <a-entity id="target-acop-elect-magn" mindar-image-target="targetIndex: 5">
+        <a-gltf-model
+          src="#acopElectMagnModelo"
+          position="0 0 0"
+          scale="1 1 1"
+          rotation="0 0 0"
+          center-model
+          touch-gestures="targetSelector: #target-acop-elect-magn; rotationFactor: 6; minScale: 0.1; maxScale: 10; panFactor: 0.02">
+        </a-gltf-model>
+      </a-entity>
+
+    </a-scene>
+
+    <!-- Blokeo / eskaneo botoia -->
+    <button id="btn-blokeo" class="eskaneatzen">Eskaneatzen</button>
+    <div id="bilaketa-adierazlea">Bilatzen...</div>
+
+    <!-- Target 1 botoiak: Iragazki Erreala / 3D Eredua -->
+    <div id="fila-emi" class="fila-opciones">
+      <button id="btn-emi-reala" class="activo">Iragazki Erreala</button>
+      <button id="btn-emi-3d">3D Eredua</button>
+    </div>
+
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        // Blokeo / eskaneo botoia: MindAR-en tracking-a pausatu/berrabiarazi
+        let blokeatuta = false;
+        const btnBlokeo = document.querySelector('#btn-blokeo');
+        const sceneEl = document.querySelector('a-scene');
+
+        // Target guztien IDak, eskaneoa berrabiaraztean guztiak "galdu" bezala
+        // markatzeko eta gainjartzerik ez izateko
+        const targetIds = [
+          'target-emi', 'target-cond', 'target-kondents',
+          'target-acop-elect', 'target-acop-magnet', 'target-acop-elect-magn'
+        ];
+
+        const resetAllTargets = () => {
+          targetIds.forEach(id => {
+            const targetEl = document.getElementById(id);
+            if (!targetEl) return;
+            targetEl.object3D.visible = false;
+            targetEl.dispatchEvent(new CustomEvent('targetLost'));
+          });
+        };
+
+        // "Bilatzen..." adierazlea: ez dago blokeatuta ETA ez da target bat ere ikusten denean
+        const adierazlea = document.querySelector('#bilaketa-adierazlea');
+        const aurkitutaState = {};
+        targetIds.forEach(id => { aurkitutaState[id] = false; });
+
+        const eguneratuAdierazlea = () => {
+          const edozeinAurkituta = Object.values(aurkitutaState).some(v => v);
+          adierazlea.style.display = (!blokeatuta && !edozeinAurkituta) ? 'block' : 'none';
+        };
+
+        targetIds.forEach(id => {
+          const targetEl = document.getElementById(id);
+          if (!targetEl) return;
+          targetEl.addEventListener('targetFound', () => {
+            aurkitutaState[id] = true;
+            eguneratuAdierazlea();
+          });
+          targetEl.addEventListener('targetLost', () => {
+            aurkitutaState[id] = false;
+            eguneratuAdierazlea();
+          });
+        });
+
+        eguneratuAdierazlea();
+
+        btnBlokeo.addEventListener('click', () => {
+          const mindarSystem = sceneEl.systems['mindar-image-system'];
+          if (!mindarSystem) {
+            console.warn('mindar-image-system ez da aurkitu; egiaztatu MindAR bertsioa.');
+            return;
+          }
+
+          blokeatuta = !blokeatuta;
+
+          if (blokeatuta) {
+            mindarSystem.pause(true); // true = kamera bideoa martxan mantendu
+            btnBlokeo.textContent = 'Blokeatuta';
+            btnBlokeo.classList.remove('eskaneatzen');
+            btnBlokeo.classList.add('blokeatuta');
+          } else {
+            resetAllTargets();
+            mindarSystem.unpause();
+            btnBlokeo.textContent = 'Eskaneatzen';
+            btnBlokeo.classList.remove('blokeatuta');
+            btnBlokeo.classList.add('eskaneatzen');
+          }
+
+          eguneratuAdierazlea();
+        });
+      });
+    </script>
+  </body>
+</html>
