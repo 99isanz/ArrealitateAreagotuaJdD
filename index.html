@@ -451,19 +451,18 @@
       device-orientation-permission-ui="enabled: false">
 
       <a-assets>
-        <!-- Target 1: EMI (iragazki erreala / 3D eredua) -->
-        <a-asset-item id="emiRealModelo" src="./EMIReal.glb"></a-asset-item>
-        <a-asset-item id="emiFilterModelo" src="./EMIFilter.glb"></a-asset-item>
-
-        <!-- Target 2: Kondentsadorea -->
-        <a-asset-item id="condModelo" src="./Cond.glb"></a-asset-item>
-
-        <!-- Target 3: hiru argazki -->
+        <!-- Target 0: hiru argazki -->
         <img id="kondents0Img" src="./Kondents0.jpg" crossorigin="anonymous" />
         <img id="kondents1Img" src="./Kondents1.jpg" crossorigin="anonymous" />
         <img id="kondents2Img" src="./Kondents2.jpg" crossorigin="anonymous" />
 
-        <!-- Target 4, 5, 6: akoplamenduak -->
+        <!-- Target 1: Kondentsadore txikia -->
+        <a-asset-item id="kondentsTxikiModelo" src="./KondentsTxiki.glb"></a-asset-item>
+
+        <!-- Target 2: Kondentsadorea -->
+        <a-asset-item id="condModelo" src="./Cond.glb"></a-asset-item>
+
+        <!-- Target 3, 4, 5: akoplamenduak -->
         <a-asset-item id="acopElectModelo" src="./AcopElect.glb"></a-asset-item>
         <a-asset-item id="acopMagnetModelo" src="./AcopMagnet.glb"></a-asset-item>
         <a-asset-item id="acopElectMagnModelo" src="./AcopElectMagn.glb"></a-asset-item>
@@ -474,50 +473,10 @@
 
       <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
 
-      <!-- Target 1: EMI - EMIReal edo EMIFilter, botoi bidez -->
-      <a-entity
-        id="target-emi"
-        mindar-image-target="targetIndex: 0"
-        bi-aukera-handler="contentA: #emi-real-modelo; contentB: #emi-filter-modelo; buttonsRow: #fila-emi; buttonA: #btn-emi-reala; buttonB: #btn-emi-3d">
-
-        <a-gltf-model
-          id="emi-real-modelo"
-          src="#emiRealModelo"
-          position="0 0 0"
-          scale="1.5 1.5 1.5"
-          rotation="0 0 0"
-          visible="true"
-          touch-gestures="targetSelector: #target-emi; rotationFactor: 6; minScale: 0.1; maxScale: 10; panFactor: 0.02">
-        </a-gltf-model>
-
-        <a-gltf-model
-          id="emi-filter-modelo"
-          src="#emiFilterModelo"
-          position="0 0 0"
-          scale="6 6 6"
-          rotation="0 0 0"
-          visible="false"
-          center-model
-          touch-gestures="targetSelector: #target-emi; rotationFactor: 6; minScale: 0.1; maxScale: 20; panFactor: 0.02">
-        </a-gltf-model>
-      </a-entity>
-
-      <!-- Target 2: Kondentsadorea modeloa -->
-      <a-entity id="target-cond" mindar-image-target="targetIndex: 1">
-        <a-gltf-model
-          src="#condModelo"
-          position="0 0 0"
-          scale="0.02 0.02 0.02"
-          rotation="0 0 0"
-          center-model
-          touch-gestures="targetSelector: #target-cond; rotationFactor: 6; minScale: 0.1; maxScale: 10; panFactor: 0.02">
-        </a-gltf-model>
-      </a-entity>
-
-      <!-- Target 3: hiru argazki, botoi bidez (bata bestearen ordez) -->
+      <!-- Target 0: hiru argazki, botoi bidez (bata bestearen ordez) -->
       <a-entity
         id="target-kondents"
-        mindar-image-target="targetIndex: 2"
+        mindar-image-target="targetIndex: 0"
         aukera-anitz-handler="contents: #kondents0-plane, #kondents1-plane, #kondents2-plane; buttons: #btn-kondents0, #btn-kondents1, #btn-kondents2; buttonsRow: #fila-kondents">
 
         <a-image
@@ -546,7 +505,31 @@
         </a-image>
       </a-entity>
 
-      <!-- Target 4: Akoplamendu elektrikoa -->
+      <!-- Target 1: Kondentsadore txikiaren modeloa -->
+      <a-entity id="target-kondents-txiki" mindar-image-target="targetIndex: 1">
+        <a-gltf-model
+          src="#kondentsTxikiModelo"
+          position="0 0 0"
+          scale="80 80 80"
+          rotation="0 0 0"
+          center-model
+          touch-gestures="targetSelector: #target-kondents-txiki; rotationFactor: 6; minScale: 0.1; maxScale: 10; panFactor: 0.02">
+        </a-gltf-model>
+      </a-entity>
+
+      <!-- Target 2: Kondentsadorea modeloa -->
+      <a-entity id="target-cond" mindar-image-target="targetIndex: 2">
+        <a-gltf-model
+          src="#condModelo"
+          position="0 0 0"
+          scale="0.02 0.02 0.02"
+          rotation="0 0 0"
+          center-model
+          touch-gestures="targetSelector: #target-cond; rotationFactor: 6; minScale: 0.1; maxScale: 10; panFactor: 0.02">
+        </a-gltf-model>
+      </a-entity>
+
+      <!-- Target 3: Akoplamendu elektrikoa -->
       <a-entity id="target-acop-elect" mindar-image-target="targetIndex: 3">
         <a-gltf-model
           src="#acopElectModelo"
@@ -558,7 +541,7 @@
         </a-gltf-model>
       </a-entity>
 
-      <!-- Target 5: Akoplamendu magnetikoa -->
+      <!-- Target 4: Akoplamendu magnetikoa -->
       <a-entity id="target-acop-magnet" mindar-image-target="targetIndex: 4">
         <a-gltf-model
           src="#acopMagnetModelo"
@@ -570,7 +553,7 @@
         </a-gltf-model>
       </a-entity>
 
-      <!-- Target 6: Akoplamendu elektromagnetikoa -->
+      <!-- Target 5: Akoplamendu elektromagnetikoa -->
       <a-entity id="target-acop-elect-magn" mindar-image-target="targetIndex: 5">
         <a-gltf-model
           src="#acopElectMagnModelo"
@@ -588,13 +571,7 @@
     <button id="btn-blokeo" class="eskaneatzen">Eskaneatzen</button>
     <div id="bilaketa-adierazlea">Bilatzen...</div>
 
-    <!-- Target 1 botoiak: Iragazki Erreala / 3D Eredua -->
-    <div id="fila-emi" class="fila-opciones">
-      <button id="btn-emi-reala" class="activo">Iragazki Erreala</button>
-      <button id="btn-emi-3d">3D Eredua</button>
-    </div>
-
-    <!-- Target 3 botoiak: Argazkia 1 / 2 / 3 -->
+    <!-- Target 0 botoiak: Argazkia 1 / 2 / 3 -->
     <div id="fila-kondents" class="fila-opciones">
       <button id="btn-kondents0" class="activo">Argazkia 1</button>
       <button id="btn-kondents1">Argazkia 2</button>
@@ -611,7 +588,7 @@
         // Target guztien IDak, eskaneoa berrabiaraztean guztiak "galdu" bezala
         // markatzeko eta gainjartzerik ez izateko
         const targetIds = [
-          'target-emi', 'target-cond', 'target-kondents',
+          'target-kondents', 'target-kondents-txiki', 'target-cond',
           'target-acop-elect', 'target-acop-magnet', 'target-acop-elect-magn'
         ];
 
